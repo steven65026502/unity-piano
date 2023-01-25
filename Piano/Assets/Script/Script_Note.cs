@@ -32,6 +32,7 @@ public class Script_Note : MonoBehaviour
 
     public void Start()
     {
+        Manager.Instance.timeAndNotes.Clear();
     }
     void Update()
     {
@@ -45,21 +46,33 @@ public class Script_Note : MonoBehaviour
 
     private void OnMouseDown()
     {
-        Note.Play();
-        transform.Translate(0, -0.5f, 0);
         mousedown = true;
-        //開始的時間
-        elapsedTime = 0;
+        NoteDown();
     }
 
     private void OnMouseUp()
     {
-        //儲存時間跟音階
-        Manager.timeAndNotes.Add(new Dictionary<string, object>() { { "time", elapsedTime }, { "NoteType", noteType }, { "Black", black }, { "NoteLevel", transform.parent.GetComponent<Script_NoteHub>().NoteLevel } });
-        transform.Translate(0, 0.5f, 0);
         mousedown = false;
+        NoteUp();
     }
     
+    public void NoteDown()
+    {
+        Note.Play();
+        transform.Translate(0, -0.5f, 0);
+        //開始的時間
+        elapsedTime = 0;
+    }
+
+    public void NoteUp()
+    {
+        Note.Stop();
+        //儲存時間跟音階
+        Manager.Instance.timeAndNotes.Add(new Dictionary<string, object>() { { "time", elapsedTime }, { "NoteType", noteType }, { "Black", black }, { "NoteLevel", transform.parent.GetComponent<Script_NoteHub>().NoteLevel } });
+        transform.Translate(0, 0.5f, 0);
+    }
+
+
     public void OnMouseOver() 
     {
         text.text = string.Format("{0}{1}{2}", black ? "#" : "", ((NoteName)noteType).ToString(), transform.parent.GetComponent<Script_NoteHub>().NoteLevel);

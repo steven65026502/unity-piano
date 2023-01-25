@@ -9,7 +9,7 @@ public class Teleporatation : MonoBehaviour
 {
     public void OnClick()
     {
-        string jsonData = JsonConvert.SerializeObject(Manager.timeAndNotes);
+        string jsonData = JsonConvert.SerializeObject(Manager.Instance.timeAndNotes);
         Debug.Log(jsonData);
     }
 }
