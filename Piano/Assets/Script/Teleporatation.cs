@@ -10,8 +10,8 @@ public class Teleporatation : MonoBehaviour
     public void OnClick()
     {
         Manager.Instance.TimeStop();
-        Manager.Instance.timeAndNotes.Clear();
         string jsonData = JsonConvert.SerializeObject(Manager.Instance.timeAndNotes);
         Debug.Log(jsonData);
+        Manager.Instance.timeAndNotes.Clear();
     }
 }
