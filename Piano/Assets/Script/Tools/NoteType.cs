@@ -4,7 +4,8 @@ using UnityEngine;
 
 public enum NoteType
 {
-    C = 0,
+    None = -1,
+    C,
     D,
     E,
     F,
@@ -15,7 +16,8 @@ public enum NoteType
 
 public enum NoteName
 {
-    Do = 0,
+    None = -1,
+    Do,
     Re,
     Me,
     Fa,

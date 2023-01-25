@@ -15,8 +15,43 @@ public class Script_Note : MonoBehaviour
     public bool black = false;
     public NoteType noteType;
 
-    bool mousedown = false;
-    public float elapsedTime { get; private set; } = 0;
+    private bool _notedown = false;
+    public bool NoteDown 
+    { 
+        get
+        {
+            return _notedown;
+        }
+        set
+        {
+            if(value)
+            {
+                if (!NoteDown)
+                {
+                    _notedown = true;
+                    Note.time = 0;
+                    Note.Play();
+                    transform.Translate(0, -0.5f, 0);
+                    //開始的時間
+                    if (Manager.Instance.time < 0) Manager.Instance.TimeStart();
+                    StartTime = Manager.Instance.time;
+                }
+            }
+            else
+            {
+                if (NoteDown)
+                {
+                    _notedown = false;
+                    EndTime = Manager.Instance.time;
+                    //儲存時間跟音階
+                    Manager.Instance.timeAndNotes.Add(new Dictionary<string, object>() { { "StartTime", StartTime }, { "EndTime", EndTime }, { "NoteType", noteType }, { "Black", black }, { "NoteLevel", transform.parent.GetComponent<Script_NoteHub>().NoteLevel } });
+                    transform.Translate(0, 0.5f, 0);
+                }
+            }
+        }
+    }
+    public float StartTime { get; private set; } = 0;
+    public float EndTime { get; private set; } = 0;
 
     public void Awake()
     {
@@ -36,42 +71,23 @@ public class Script_Note : MonoBehaviour
     }
     void Update()
     {
-        if(mousedown)
+        if(NoteDown)
         {   
             //使用elapsedTime 更新UI 或其他操作    
-            elapsedTime += Time.deltaTime;
-            timer.text = ((int)elapsedTime).ToString();
+            timer.text = ((int)(Manager.Instance.time - StartTime)).ToString();
+            if (Note.isPlaying && Note.time > 1.5f) Note.time = 1;
         }
     }
 
     private void OnMouseDown()
     {
-        mousedown = true;
-        NoteDown();
+        NoteDown = true;
     }
 
     private void OnMouseUp()
     {
-        mousedown = false;
-        NoteUp();
+        NoteDown = false;
     }
-    
-    public void NoteDown()
-    {
-        Note.Play();
-        transform.Translate(0, -0.5f, 0);
-        //開始的時間
-        elapsedTime = 0;
-    }
-
-    public void NoteUp()
-    {
-        Note.Stop();
-        //儲存時間跟音階
-        Manager.Instance.timeAndNotes.Add(new Dictionary<string, object>() { { "time", elapsedTime }, { "NoteType", noteType }, { "Black", black }, { "NoteLevel", transform.parent.GetComponent<Script_NoteHub>().NoteLevel } });
-        transform.Translate(0, 0.5f, 0);
-    }
-
 
     public void OnMouseOver() 
     {
