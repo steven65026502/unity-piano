@@ -3,20 +3,11 @@ using System.Collections.Generic;
 using UnityEngine;
 using TMPro;
 using System.IO;
+using Newtonsoft.Json;
 
 public class Script_Note : MonoBehaviour
 {
-
-    [SerializeField]
-    Data data;
-    public class Data
-    {
-        public float time;
-        public NoteType notetype;
-    }
     //時間跟音階的陣列
-    public List<KeyValuePair<float, NoteType>> timeAndNotes;
-
     private AudioSource Note;
     private TextMeshProUGUI text;
     private TextMeshProUGUI timer;
@@ -30,7 +21,7 @@ public class Script_Note : MonoBehaviour
     public void Awake()
     {
         //陣列初始化
-        timeAndNotes = new List<KeyValuePair<float, NoteType>>();
+        //timeAndNotes = new List<Dictionary<string, object>>();
 
         timer = GameObject.Find("timer").transform.Find("timer_text").GetComponent<TextMeshProUGUI>();
         text = transform.parent.parent.parent.Find("Canvas").Find("nowtype").GetComponent<TextMeshProUGUI>();
@@ -46,12 +37,9 @@ public class Script_Note : MonoBehaviour
     {
         if(mousedown)
         {   
-            //儲存時間跟音階
-            timeAndNotes.Add(new KeyValuePair<float, NoteType>(elapsedTime, noteType));
             //使用elapsedTime 更新UI 或其他操作    
             elapsedTime += Time.deltaTime;
             timer.text = ((int)elapsedTime).ToString();
-            Debug.Log(timeAndNotes);
         }
     }
 
@@ -66,7 +54,8 @@ public class Script_Note : MonoBehaviour
 
     private void OnMouseUp()
     {
-        Note.Stop();
+        //儲存時間跟音階
+        Manager.timeAndNotes.Add(new Dictionary<string, object>() { { "time", elapsedTime }, { "NoteType", noteType }, { "Black", black }, { "NoteLevel", transform.parent.GetComponent<Script_NoteHub>().NoteLevel } });
         transform.Translate(0, 0.5f, 0);
         mousedown = false;
     }
@@ -80,26 +69,5 @@ public class Script_Note : MonoBehaviour
     {
         if(text.text == string.Format("{0}{1}{2}", black ? "#" : "", ((NoteName)noteType).ToString(), transform.parent.GetComponent<Script_NoteHub>().NoteLevel))
             text.text = "";
-    }
-
-
-    public void OnClick()
-    {
-
-        //抓取timeAndNotes
-        List<KeyValuePair<float, NoteType>> timeAndNotes = GetComponent<Script_Note>().timeAndNotes;
-        PlayerPrefs.SetString("jsondata", JsonUtility.ToJson(timeAndNotes));
-        string jsonData = JsonUtility.ToJson(timeAndNotes);
-        File.WriteAllText(Application.dataPath + "/DATA.json", jsonData);
-        FileStream fs = new FileStream(Application.dataPath + "/DATA.json", FileMode.Create);
-        StreamWriter sw = new StreamWriter(fs);
-        sw.WriteLine(data.time);
-        sw.WriteLine(data.notetype);
-        sw.Close();
-        fs.Close();
-        if (data == null)
-        {
-            data = JsonUtility.FromJson<Data>(PlayerPrefs.GetString("jsondata"));
-        }
     }
 }
