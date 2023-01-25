@@ -75,7 +75,7 @@ public class Script_Note : MonoBehaviour
         {   
             //使用elapsedTime 更新UI 或其他操作    
             timer.text = ((int)(Manager.Instance.time - StartTime)).ToString();
-            if (Note.isPlaying && Note.time > 1.5f) Note.time = 1;
+            if (Note.isPlaying && Note.time > 1.6f) Note.time = 1.6f;
         }
     }
 
