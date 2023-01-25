@@ -131,7 +131,7 @@ PrefabInstance:
     m_Modifications:
     - target: {fileID: 4963620918662753633, guid: b0f4b8db9afba3d47b285c230f7ce325, type: 3}
       propertyPath: m_Name
-      value: BlackNoteG
+      value: BlackNoteA
       objectReference: {fileID: 0}
     - target: {fileID: 5740262419002243035, guid: b0f4b8db9afba3d47b285c230f7ce325, type: 3}
       propertyPath: m_RootOrder
@@ -179,7 +179,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 6381398264609630659, guid: b0f4b8db9afba3d47b285c230f7ce325, type: 3}
       propertyPath: noteType
-      value: 4
+      value: 5
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_AddedGameObjects: []
@@ -335,7 +335,7 @@ PrefabInstance:
     m_Modifications:
     - target: {fileID: 4963620918662753633, guid: b0f4b8db9afba3d47b285c230f7ce325, type: 3}
       propertyPath: m_Name
-      value: BlackNoteA
+      value: BlackNoteB
       objectReference: {fileID: 0}
     - target: {fileID: 5740262419002243035, guid: b0f4b8db9afba3d47b285c230f7ce325, type: 3}
       propertyPath: m_RootOrder
@@ -383,7 +383,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 6381398264609630659, guid: b0f4b8db9afba3d47b285c230f7ce325, type: 3}
       propertyPath: noteType
-      value: 5
+      value: 6
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_AddedGameObjects: []
@@ -471,7 +471,7 @@ PrefabInstance:
     m_Modifications:
     - target: {fileID: 4963620918662753633, guid: b0f4b8db9afba3d47b285c230f7ce325, type: 3}
       propertyPath: m_Name
-      value: BlackNoteD
+      value: BlackNoteE
       objectReference: {fileID: 0}
     - target: {fileID: 5740262419002243035, guid: b0f4b8db9afba3d47b285c230f7ce325, type: 3}
       propertyPath: m_RootOrder
@@ -519,7 +519,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 6381398264609630659, guid: b0f4b8db9afba3d47b285c230f7ce325, type: 3}
       propertyPath: noteType
-      value: 1
+      value: 2
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_AddedGameObjects: []
@@ -743,7 +743,7 @@ PrefabInstance:
     m_Modifications:
     - target: {fileID: 4963620918662753633, guid: b0f4b8db9afba3d47b285c230f7ce325, type: 3}
       propertyPath: m_Name
-      value: BlackNoteC
+      value: BlackNoteD
       objectReference: {fileID: 0}
     - target: {fileID: 5740262419002243035, guid: b0f4b8db9afba3d47b285c230f7ce325, type: 3}
       propertyPath: m_RootOrder
@@ -789,6 +789,10 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 6381398264609630659, guid: b0f4b8db9afba3d47b285c230f7ce325, type: 3}
+      propertyPath: noteType
+      value: 1
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_AddedGameObjects: []
   m_SourcePrefab: {fileID: 100100000, guid: b0f4b8db9afba3d47b285c230f7ce325, type: 3}
@@ -807,7 +811,7 @@ PrefabInstance:
     m_Modifications:
     - target: {fileID: 4963620918662753633, guid: b0f4b8db9afba3d47b285c230f7ce325, type: 3}
       propertyPath: m_Name
-      value: BlackNoteF
+      value: BlackNoteG
       objectReference: {fileID: 0}
     - target: {fileID: 5740262419002243035, guid: b0f4b8db9afba3d47b285c230f7ce325, type: 3}
       propertyPath: m_RootOrder
@@ -855,7 +859,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 6381398264609630659, guid: b0f4b8db9afba3d47b285c230f7ce325, type: 3}
       propertyPath: noteType
-      value: 3
+      value: 4
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_AddedGameObjects: []
