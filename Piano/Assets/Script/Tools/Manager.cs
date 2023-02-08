@@ -26,8 +26,8 @@ public class Manager : MonoBehaviour
     }
 
     private List<Action> doinupdate;
-    public List<Dictionary<string, object>> timeAndNotes;
-    public List<List<Dictionary<string, object>>> ServerTimeAndNotes;
+    public PianoRoll timeAndNotes;
+    public List<PianoRoll> ServerTimeAndNotes;
     private Socket socket;
     public float time { get; private set; } = -1;
 
@@ -35,8 +35,8 @@ public class Manager : MonoBehaviour
     {
         time = -1;
         doinupdate = new List<Action>();
-        timeAndNotes = new List<Dictionary<string, object>>();
-        ServerTimeAndNotes = new List<List<Dictionary<string, object>>>();
+        timeAndNotes = new PianoRoll();
+        ServerTimeAndNotes = new List<PianoRoll>();
         socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
         socket.BeginConnect(new IPEndPoint(IPAddress.Loopback, 1234), (ar) =>
         {
@@ -87,7 +87,7 @@ public class Manager : MonoBehaviour
         {
             if (ServerTimeAndNotes.Count <= 0)
                 TimeStop();
-            ServerTimeAndNotes.Add(JsonConvert.DeserializeObject<List<Dictionary<string, object>>>(System.Text.Encoding.UTF8.GetString(data)));
+            ServerTimeAndNotes.Add(JsonConvert.DeserializeObject<PianoRoll>(System.Text.Encoding.UTF8.GetString(data)));
         }
         socket.BeginReceive(lendata, 0, INT_LEN, SocketFlags.None, Response, lendata);
     }
@@ -109,28 +109,27 @@ public class Manager : MonoBehaviour
             if (ServerTimeAndNotes.Count > 0)
             {
                 TimeStart();
-                var nownotes = ServerTimeAndNotes[0].Where((data) => time >= Convert.ToSingle(data["StartTime"]) && time < Convert.ToSingle(data["EndTime"])).ToArray();
-                var endnotes = ServerTimeAndNotes[0].Where((data) => time >= Convert.ToSingle(data["EndTime"])).ToArray();
+                var nownotes = ServerTimeAndNotes[0].onset_events.Where((data) => time >= Convert.ToSingle(data[(byte)PianoRollOnsetEventIndex.StartTime] / 8f) && time < Convert.ToSingle(data[(byte)PianoRollOnsetEventIndex.EndTime])).ToArray();
+                var endnotes = ServerTimeAndNotes[0].onset_events.Where((data) => time >= Convert.ToSingle(data[(byte)PianoRollOnsetEventIndex.EndTime]) / 8f).ToArray();
 
                 foreach (var endnote in endnotes)
                 {
-                    Script_NoteHub hub = GameObject.Find("piano").transform.Find("AllNotes").GetComponentsInChildren<Script_NoteHub>().Where((hub) => hub.NoteLevel == Convert.ToInt32(endnote["NoteLevel"])).First();
-                    Script_Note note = hub.transform.GetComponentsInChildren<Script_Note>().Where((note) => note.black == Convert.ToBoolean(endnote["Black"]) && note.noteType == (NoteType)Convert.ToInt32(endnote["NoteType"])).First();
+                    Script_Note note = PianoRoll.OnsetEventToNote(GameObject.Find("piano").transform.Find("AllNotes").GetComponentsInChildren<Script_NoteHub>(), endnote);
                     if (note.NoteDown)
                     {
                         note.NoteDown = false;
-                        ServerTimeAndNotes[0].Remove(endnote);
+                        ServerTimeAndNotes[0].onset_events.Remove(endnote);
                     }
                 }
 
                 foreach (var nownote in nownotes)
                 {
-                    Script_NoteHub hub = GameObject.Find("piano").transform.Find("AllNotes").GetComponentsInChildren<Script_NoteHub>().Where((hub) => hub.NoteLevel == Convert.ToInt32(nownote["NoteLevel"])).First();
-                    Script_Note note = hub.transform.GetComponentsInChildren<Script_Note>().Where((note) => note.black == Convert.ToBoolean(nownote["Black"]) && note.noteType == (NoteType)Convert.ToInt32(nownote["NoteType"])).First();
+                    Script_Note note = PianoRoll.OnsetEventToNote(GameObject.Find("piano").transform.Find("AllNotes").GetComponentsInChildren<Script_NoteHub>(), nownote);
+                    note.Note.volume = PianoRoll.PowerToVolume(nownote[(byte)PianoRollOnsetEventIndex.Power]);
                     note.NoteDown = true;
                 }
 
-                if (ServerTimeAndNotes[0].Count <= 0)
+                if (ServerTimeAndNotes[0].onset_events.Count <= 0)
                 {
                     TimeStop();
                     ServerTimeAndNotes.RemoveAt(0);

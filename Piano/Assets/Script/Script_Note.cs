@@ -3,12 +3,12 @@ using System.Collections.Generic;
 using UnityEngine;
 using TMPro;
 using System.IO;
-using Newtonsoft.Json;
+using System;
 
 public class Script_Note : MonoBehaviour
 {
     //時間跟音階的陣列
-    private AudioSource Note;
+    public AudioSource Note { get; private set; }
     private TextMeshProUGUI text;
     private TextMeshProUGUI timer;
 
@@ -44,7 +44,7 @@ public class Script_Note : MonoBehaviour
                     _notedown = false;
                     EndTime = Manager.Instance.time;
                     //儲存時間跟音階
-                    Manager.Instance.timeAndNotes.Add(new Dictionary<string, object>() { { "StartTime", StartTime }, { "EndTime", EndTime }, { "NoteType", noteType }, { "Black", black }, { "NoteLevel", transform.parent.GetComponent<Script_NoteHub>().NoteLevel } });
+                    Manager.Instance.timeAndNotes.onset_events.Add(PianoRoll.NoteToOnsetEvent(this));
                     transform.Translate(0, 0.5f, 0);
                 }
             }
@@ -61,7 +61,7 @@ public class Script_Note : MonoBehaviour
         timer = GameObject.Find("timer").transform.Find("timer_text").GetComponent<TextMeshProUGUI>();
         text = transform.parent.parent.parent.Find("Canvas").Find("nowtype").GetComponent<TextMeshProUGUI>();
 
-        Note = GetComponent<AudioSource>();
+        Note = GetComponent<AudioSource>();                 //抓取音檔
         Note.clip = Resources.Load<AudioClip>(string.Format("NoteSound/{0}{1}{2}", noteType.ToString(), black ? "b" : "", transform.parent.GetComponent<Script_NoteHub>().NoteLevel));
     }
 
@@ -73,9 +73,8 @@ public class Script_Note : MonoBehaviour
     {
         if(NoteDown)
         {   
-            //使用elapsedTime 更新UI 或其他操作    
             timer.text = ((int)(Manager.Instance.time - StartTime)).ToString();
-            if (Note.isPlaying && Note.time > 1.6f) Note.time = 1.6f;
+            if (Note.isPlaying && Note.time > 1.6f) Note.time = 1.6f; //維持在音檔為1.6秒的狀態
         }
     }
 

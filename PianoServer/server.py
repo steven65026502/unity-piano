@@ -9,7 +9,8 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         print(addr,"connected.")
 
         while True:
-            json = input("piano json:").encode()
+            with open(input("json file:"), 'r') as f:
+                json = f.read().encode()
             #data = c.recv(1024)
             #if not data:
             #    break
