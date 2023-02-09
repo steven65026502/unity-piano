@@ -4,6 +4,7 @@ using UnityEngine;
 using TMPro;
 using System.IO;
 using System;
+using UnityEditor.Experimental.GraphView;
 
 public class Script_Note : MonoBehaviour
 {
@@ -12,11 +13,15 @@ public class Script_Note : MonoBehaviour
     private TextMeshProUGUI text;
     private TextMeshProUGUI timer;
 
+    private int[] pianoevent = null;
+
     public bool black = false;
     public NoteType noteType;
 
+    bool mouseon = false;
+
     private bool _notedown = false;
-    public bool NoteDown 
+    bool NoteDown 
     { 
         get
         {
@@ -50,6 +55,15 @@ public class Script_Note : MonoBehaviour
             }
         }
     }
+    
+    public string NoteString
+    {
+        get
+        {
+            return string.Format("{0}{1}{2}", black ? "#" : "", ((NoteName)noteType).ToString(), transform.parent.GetComponent<Script_NoteHub>().NoteLevel);
+        }
+    }
+
     public float StartTime { get; private set; } = 0;
     public float EndTime { get; private set; } = 0;
 
@@ -73,29 +87,43 @@ public class Script_Note : MonoBehaviour
     {
         if(NoteDown)
         {   
-            timer.text = ((int)(Manager.Instance.time - StartTime)).ToString();
-            if (Note.isPlaying && Note.time > 1.6f) Note.time = 1.6f; //維持在音檔為1.6秒的狀態
+            if(mouseon) timer.text = ((int)(Manager.Instance.time - StartTime)).ToString();
+            if (Note.isPlaying && Note.time > 1.7f) Note.time = 1.5f; //維持在音檔為1.6秒的狀態
         }
+        if (pianoevent != null && (Manager.Instance.time >= Convert.ToSingle(pianoevent[(byte)PianoRollOnsetEventIndex.EndTime] / PianoRoll.sectobit) || Manager.Instance.time < 0))
+        {
+            NoteDown = false;
+            pianoevent = null;
+        }
+    }
+
+    public void SetPianoEvent(int[] nowevent)
+    {
+        NoteDown = false;
+        pianoevent = nowevent;
+        NoteDown = true;
     }
 
     private void OnMouseDown()
     {
+        mouseon = true;
         NoteDown = true;
     }
 
     private void OnMouseUp()
     {
+        mouseon = false;
         NoteDown = false;
     }
 
     public void OnMouseOver() 
     {
-        text.text = string.Format("{0}{1}{2}", black ? "#" : "", ((NoteName)noteType).ToString(), transform.parent.GetComponent<Script_NoteHub>().NoteLevel);
+        text.text = NoteString;
     }
 
     public void OnMouseExit() 
     {
-        if(text.text == string.Format("{0}{1}{2}", black ? "#" : "", ((NoteName)noteType).ToString(), transform.parent.GetComponent<Script_NoteHub>().NoteLevel))
+        if(text.text == NoteString)
             text.text = "";
     }
 }

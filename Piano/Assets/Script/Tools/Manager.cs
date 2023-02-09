@@ -6,6 +6,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Linq;
 using UnityEngine;
+using TMPro;
 
 public class Manager : MonoBehaviour
 {
@@ -109,30 +110,31 @@ public class Manager : MonoBehaviour
             if (ServerTimeAndNotes.Count > 0)
             {
                 TimeStart();
-                var nownotes = ServerTimeAndNotes[0].onset_events.Where((data) => time >= Convert.ToSingle(data[(byte)PianoRollOnsetEventIndex.StartTime] / 8f) && time < Convert.ToSingle(data[(byte)PianoRollOnsetEventIndex.EndTime])).ToArray();
-                var endnotes = ServerTimeAndNotes[0].onset_events.Where((data) => time >= Convert.ToSingle(data[(byte)PianoRollOnsetEventIndex.EndTime]) / 8f).ToArray();
-
+                var nownotes = ServerTimeAndNotes[0].onset_events.Where((data) => time >= Convert.ToSingle(data[(byte)PianoRollOnsetEventIndex.StartTime] / PianoRoll.sectobit) && time < Convert.ToSingle(data[(byte)PianoRollOnsetEventIndex.EndTime] / PianoRoll.sectobit)).ToArray();
+                var endnotes = ServerTimeAndNotes[0].onset_events.Where((data) => time >= Convert.ToSingle(data[(byte)PianoRollOnsetEventIndex.EndTime] / PianoRoll.sectobit)).ToArray();
                 foreach (var endnote in endnotes)
                 {
-                    Script_Note note = PianoRoll.OnsetEventToNote(GameObject.Find("piano").transform.Find("AllNotes").GetComponentsInChildren<Script_NoteHub>(), endnote);
-                    if (note.NoteDown)
-                    {
-                        note.NoteDown = false;
-                        ServerTimeAndNotes[0].onset_events.Remove(endnote);
-                    }
+                    ServerTimeAndNotes[0].onset_events.Remove(endnote);
                 }
 
                 foreach (var nownote in nownotes)
                 {
                     Script_Note note = PianoRoll.OnsetEventToNote(GameObject.Find("piano").transform.Find("AllNotes").GetComponentsInChildren<Script_NoteHub>(), nownote);
+                    //if (note.NoteDown) Debug.Log(note.NoteString + " down");
                     note.Note.volume = PianoRoll.PowerToVolume(nownote[(byte)PianoRollOnsetEventIndex.Power]);
-                    note.NoteDown = true;
+                    note.SetPianoEvent(nownote);
+                    ServerTimeAndNotes[0].onset_events.Remove(nownote);
                 }
 
                 if (ServerTimeAndNotes[0].onset_events.Count <= 0)
                 {
                     TimeStop();
                     ServerTimeAndNotes.RemoveAt(0);
+                }
+                else
+                {
+                    TextMeshProUGUI timer = GameObject.Find("timer").transform.Find("timer_text").GetComponent<TextMeshProUGUI>();
+                    timer.text = ((int)Instance.time).ToString();
                 }
             }
         }
