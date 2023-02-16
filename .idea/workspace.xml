@@ -5,8 +5,8 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="8a6a8f46-f7af-418a-ae66-733723b5024b" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/PianoServer/json_loop.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pianoroll/2570.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/PianoServer/json_loop.py" beforeDir="false" afterPath="$PROJECT_DIR$/PianoServer/json_loop.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
