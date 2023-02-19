@@ -29,7 +29,7 @@ label_dir = "pianoroll"
 pr_dataset = json_list(root_dir, label_dir)
 
 for i, (data, label) in enumerate(pr_dataset):
-    print(f"Item {i}:")
-    print(f"Data: {data}")
-    print(f"Label: {label}")
-    # time.sleep(0.1)
+     print(f"Item {i}:")
+     print(f"Data: {data}")
+     print(f"Label: {label}")
+     time.sleep(0.1)
