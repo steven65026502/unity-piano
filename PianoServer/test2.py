@@ -9,13 +9,16 @@ data_path = 'C:\\Users\\謝向嶸\\Desktop\\專題用\\PIANO\\pianoroll\\0.json'
 # 读取处理后的数据
 with open(data_path, 'r') as f:
     processed_notes = f.read()
+    print("1")
 
 # 将字符串转换为列表并转换为NumPy数组
 notes = np.array(processed_notes.split(' '))
+print("2")
 
 # 构建字典，将音符映射到整数值
 note_to_int_processed = {note: i for i, note in enumerate(set(notes))}
 encoded_processed_notes = np.array([note_to_int_processed[note] for note in notes])
+print("3")
 
 # 定义模型参数
 input_size = output_size = len(note_to_int_processed)
@@ -28,6 +31,7 @@ batch_size = 64
 seq_length = 32
 learning_rate = 0.001
 num_epochs = 100
+print("4")
 
 # 创建训练用的数据集
 def create_dataset(seq_length, encoded_notes):
@@ -38,11 +42,13 @@ def create_dataset(seq_length, encoded_notes):
         y.append(encoded_notes[i + seq_length])
     X = np.array(X)
     y = np.array(y)
+    print("5")
     return X, y
 
 X, y = create_dataset(seq_length, encoded_processed_notes)
 dataset = torch.utils.data.TensorDataset(torch.tensor(X), torch.tensor(y))
 dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True)
+print("6")
 
 # 定义模型
 class TransformerModel(nn.Module):
@@ -56,35 +62,41 @@ class TransformerModel(nn.Module):
             nn.Tanh(),
             nn.Linear(nhid, nhead)
         )
-        encoder_layers = TransformerEncoderLayer(nhead, nhid, dropout)
+        encoder_layers = TransformerEncoderLayer(nhead, nhid, dim_feedforward, dropout)
         self.transformer_encoder = TransformerEncoder(encoder_layers, nlayers)
         self.encoder = nn.Embedding(ntoken, ninp)
         self.ninp = ninp
         self.decoder = nn.Linear(ninp, ntoken)
 
         self.init_weights()
+        print("7")
 
     def init_weights(self):
         initrange = 0.1
         self.encoder.weight.data.uniform_(-initrange, initrange)
         self.decoder.bias.data.zero_()
         self.decoder.weight.data.uniform_(-initrange, initrange)
+        print("8")
 
-    def forward(self, src, src_mask):
+    def forward(self, src, mask=None):
         if self.src_mask is None or self.src_mask.size(0) != len(src):
             device = src.device
             mask = self._generate_square_subsequent_mask(len(src)).to(device)
             self.src_mask = mask
+            print("9")
 
         src = self.encoder(src) * np.sqrt(self.ninp)
         src = self.pos_encoder(src)
         output = self.transformer_encoder(src, self.src_mask)
         output = self.decoder(output)
+        print("10")
         return output
 
     def _generate_square_subsequent_mask(self, sz):
         mask = (torch.triu(torch.ones(sz, sz)) == 1).transpose(0, 1)
-        mask = mask.float().masked_fill(mask ==0, float('-inf')).masked_fill(mask == 1, 0.0)
+        mask = mask.float().masked_fill(mask == 0, float('-inf')).masked_fill(mask == 1, float(0.0))
+        print("11")
+        return mask
 
 
 # 创建音符到数字的映射
@@ -94,15 +106,18 @@ for i, note in enumerate(set(notes)):
     note = note.strip()
     note_to_int[note] = i
     int_to_note[i] = note
+    # print("12")
 
 # 将音符转换为整数编码
 encoded_notes = [note_to_int[note.strip()] for note in notes]
+print("13")
 
 # 划分训练集和测试集
 train_ratio = 0.8
 train_size = int(len(encoded_notes) * train_ratio)
 train_set = encoded_notes[:train_size]
 test_set = encoded_notes[train_size:]
+print("14")
 
 
 # 定义模型
@@ -122,7 +137,7 @@ class TransformerModel(nn.Module):
         self.encoder = nn.Embedding(ntoken, ninp)
         self.ninp = ninp
         self.decoder = nn.Linear(ninp, ntoken)
-
+        print("15")
         self.init_weights()
 
     def init_weights(self):
@@ -130,6 +145,7 @@ class TransformerModel(nn.Module):
         self.encoder.weight.data.uniform_(-initrange, initrange)
         self.decoder.bias.data.zero_()
         self.decoder.weight.data.uniform_(-initrange, initrange)
+        print("16")
 
     def forward(self, src, mask=None):
         if self.src_mask is None or self.src_mask.size(0) != len(src):
@@ -141,30 +157,19 @@ class TransformerModel(nn.Module):
         src = self.pos_encoder(src)
         output = self.transformer_encoder(src, self.src_mask)
         output = self.decoder(output)
+        print("17")
         return output
 
     def _generate_square_subsequent_mask(self, sz):
         mask = (torch.triu(torch.ones(sz, sz)) == 1).transpose(0, 1)
         mask = mask.float().masked_fill(mask == 0, float('-inf')).masked_fill(mask == 1, float(0.0))
+        print("18")
         return mask
+
 
 
 # 定义训练函数
 def train(model, train_loader, criterion, optimizer, device):
-    """
-    Trains the given model on the training set using the provided optimizer and loss criterion.
-
-    Args:
-        model: The model to train.
-        train_loader: A PyTorch DataLoader for the training set.
-        criterion: The loss criterion to use (e.g. nn.CrossEntropyLoss).
-        optimizer: The optimizer to use (e.g. torch.optim.Adam).
-        device: The device to run the training on (e.g. 'cpu' or 'cuda').
-
-    Returns:
-        The total loss and accuracy over the entire training set.
-    """
-
     # Set the model to train mode
     model.train()
 
@@ -193,11 +198,12 @@ def train(model, train_loader, criterion, optimizer, device):
         total_correct += (predictions == targets).sum().item()
         total_samples += targets.size(0)
         total_loss += loss.item()
+        print("19")
 
     # Compute the average loss and accuracy over the entire training set
     avg_loss = total_loss / len(train_loader)
     avg_accuracy = total_correct / total_samples
-
+    print("20")
     return avg_loss, avg_accuracy
 
 def evaluate(model, test_data, batch_size, criterion):
@@ -214,7 +220,9 @@ def evaluate(model, test_data, batch_size, criterion):
             output = model(x, None)
             loss = criterion(output.view(-1, output.shape[-1]), y)
             test_loss += loss.item()
+            print("21")
     return test_loss / n_batches
+
 def test(model, test_loader, criterion):
     model.eval()  # 将模型切换到评估模式
     test_loss = 0.0
@@ -225,8 +233,10 @@ def test(model, test_loader, criterion):
             output = model(data)
             loss = criterion(output, target)
             test_loss += loss.item() * data.size(0)  # 将损失值累加到总损失中
+            print("22")
 
     test_loss /= test_size  # 计算平均测试误差
+    print("23")
     return test_loss
 
 
