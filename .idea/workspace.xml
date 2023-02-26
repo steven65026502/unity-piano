@@ -5,12 +5,7 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="8a6a8f46-f7af-418a-ae66-733723b5024b" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/PianoServer/dictionary_roll.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/PianoServer/test3.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/PianoServer/server.py" beforeDir="false" afterPath="$PROJECT_DIR$/PianoServer/server.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/PianoServer/test.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/PianoServer/test2.py" beforeDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
