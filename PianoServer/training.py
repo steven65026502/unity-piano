@@ -6,15 +6,16 @@ from torch import nn
 from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import Dataset, DataLoader
 from dictionary_roll import onseteventstoword, wordtoint
+from torch.nn.utils import clip_grad_norm_
 
 # 超参数
 vocab_size = 4768
-max_len = 512
-batch_size = 8
+max_len = 256
+batch_size = 6
 d_model = 256
 nhead = 8
-num_encoder_layers = 6
-num_decoder_layers = 6
+num_encoder_layers = 4
+num_decoder_layers = 4
 dim_feedforward = 1024
 dropout = 0.1
 lr = 0.001
@@ -86,13 +87,14 @@ class WordIntDataset(Dataset):
         self.data = data
         self.word2int = {}
         self.int2word = {}
+        self.stride = 64  # 设置滑动窗口的步长
         self.tokens = []
-        json_data = {"key1": "value1", "key2": "value2"}
         for json_data in self.data:
             # 将字典转换为整数列表
             words = onseteventstoword(json_data)
-            seq = wordtoint(words)
-            self.tokens.extend(seq)
+            seq = self.sliding_window(wordtoint(words))
+            for window in seq:
+                self.tokens.extend(window)
 
         # 构建词表
         for token in self.tokens:
@@ -107,8 +109,14 @@ class WordIntDataset(Dataset):
         self.word2int["<PAD>"] = len(self.word2int)
         self.int2word[len(self.int2word)] = "<PAD>"
 
+    def sliding_window(self, seq):
+        windowed_seq = []
+        for i in range(0, len(seq) - max_len, self.stride):
+            windowed_seq.append(seq[i: i + max_len])
+        return windowed_seq
+
     def __len__(self):
-        return len(self.tokens)
+        return len(self.tokens) // max_len
 
     def __getitem__(self, index):
         seq_len = max_len
@@ -117,17 +125,13 @@ class WordIntDataset(Dataset):
             seq += [self.word2int["<PAD>"]] * (seq_len - len(seq))
         src = torch.tensor(seq)
         tgt_input = src.clone()
-        tgt_output = src.clone()
-        tgt_output = tgt_output.unsqueeze(1)
-        tgt_output[:, -1] = self.word2int["<EOS>"]
+        tgt_output = torch.cat((tgt_input[1:], torch.tensor([self.word2int["<EOS>"]])), 0)  # 修改此行
         if src.shape[0] < max_len:
             pad_tensor = torch.tensor([self.word2int["<PAD>"]] * (max_len - src.shape[0]))
             src = torch.cat((src, pad_tensor))
             tgt_input = torch.cat((tgt_input, pad_tensor))
-            tgt_output = torch.cat((tgt_output, torch.tensor([[self.word2int["<PAD>"]] * max_len])), dim=1)
+            tgt_output = torch.cat((tgt_output, torch.tensor([self.word2int["<PAD>"]] * (max_len - tgt_output.shape[0]))))  # 修改此行
         return src, tgt_input, tgt_output, len(seq)
-
-
 
 # 加载数据
 train_data = []
@@ -153,7 +157,9 @@ train_dataset, val_dataset = torch.utils.data.random_split(train_dataset, [num_t
 # 初始化数据加载器
 train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
 val_dataloader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
-
+# 在训练循环外部初始化最佳验证损失和对应的epoch
+best_val_loss = float("inf")
+best_epoch = -1
 # 训练模型
 for epoch in range(num_epochs):
     # 训练
@@ -163,27 +169,33 @@ for epoch in range(num_epochs):
         optimizer.zero_grad()
         output = model(src, tgt)
         loss = criterion(output.reshape(-1, output.shape[2]), tgt_out.reshape(-1))
-        loss.backward()
-        if torch.isnan(loss):
+        if torch.isnan(loss):  # 检查损失值是否为 NaN
             continue
+        loss.backward()
+        clip_grad_norm_(model.parameters(), max_norm=1.0)  # 添加梯度裁剪
         optimizer.step()
         if i % 10 == 0:
             print(f"Epoch {epoch + 1}, Batch {i + 1}, Training Loss: {loss.item():.4f}")
 
-    # 验证
-    model.eval()
-    total_val_loss = 0
-    with torch.no_grad():
-        for i, batch in enumerate(val_dataloader):
-            src, tgt, tgt_out, lengths = [x.to(device) for x in batch]
-            output = model(src, tgt)
-            loss = criterion(output.reshape(-1, output.shape[2]), tgt_out.reshape(-1))
-            total_val_loss += loss.item()
-        avg_val_loss = total_val_loss / len(val_dataloader)
-        print(f"Epoch {epoch + 1}, Validation Loss: {avg_val_loss:.4f}")
 
-    # 重新加载数据集
-    train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-    val_dataloader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
+   # 验证
+model.eval()
+total_val_loss = 0
+with torch.no_grad():
+    for i, batch in enumerate(val_dataloader):
+        src, tgt, tgt_out, lengths = [x.to(device) for x in batch]
+        output = model(src, tgt)
+        loss = criterion(output.reshape(-1, output.shape[2]), tgt_out.reshape(-1))
+        if torch.isnan(loss):  # 检查损失值是否为 NaN
+            continue
+        total_val_loss += loss.item()
+    avg_val_loss = total_val_loss / len(val_dataloader)
+    print(f"Epoch {epoch + 1}, Validation Loss: {avg_val_loss:.4f}")
 
-torch.save(model.state_dict(), 'model.pt')
+# 更新并保存最佳验证损失和对应的模型权重
+    if avg_val_loss < best_val_loss:
+        best_val_loss = avg_val_loss
+        best_epoch = epoch
+        torch.save(model.state_dict(), f"model_best_epoch_{best_epoch}.pt")
+
+print(f"Best Validation Loss: {best_val_loss:.4f} at epoch {best_epoch + 1}")
