@@ -1,4 +1,4 @@
-using Newtonsoft.Json;
+﻿using Newtonsoft.Json;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -11,7 +11,7 @@ using TMPro;
 public class Manager : MonoBehaviour
 {
     public const int INT_LEN = 4;
-
+    public static bool returnMode = false;
     private static Manager _instance = null;
     public static Manager Instance
     {
@@ -30,7 +30,7 @@ public class Manager : MonoBehaviour
     public PianoRoll timeAndNotes;
     public List<PianoRoll> ServerTimeAndNotes;
     private Socket socket;
-    public float time { get; private set; } = -1;
+    public float time { get; set; } = -1;
 
     private void Awake()
     {
@@ -109,6 +109,19 @@ public class Manager : MonoBehaviour
         {
             if (ServerTimeAndNotes.Count > 0)
             {
+                if (ServerTimeAndNotes.Count > 0)
+                {
+                    if (!returnMode)
+                    {
+                        Teleporatation teleportation = GameObject.FindObjectOfType<Teleporatation>();
+                        teleportation.OnClick();
+                        returnMode = true;
+                    }
+                }
+                else
+                {
+                    returnMode = false;
+                }
                 TimeStart();
                 var nownotes = ServerTimeAndNotes[0].onset_events.Where((data) => time >= Convert.ToSingle(data[(byte)PianoRollOnsetEventIndex.StartTime] / PianoRoll.sectobit) && time < Convert.ToSingle(data[(byte)PianoRollOnsetEventIndex.EndTime] / PianoRoll.sectobit)).ToArray();
                 var endnotes = ServerTimeAndNotes[0].onset_events.Where((data) => time >= Convert.ToSingle(data[(byte)PianoRollOnsetEventIndex.EndTime] / PianoRoll.sectobit)).ToArray();
