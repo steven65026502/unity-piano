@@ -4,7 +4,6 @@ using UnityEngine;
 using TMPro;
 using System.IO;
 using System;
-using UnityEditor.Experimental.GraphView;
 
 public class Script_Note : MonoBehaviour
 {
