@@ -13,6 +13,9 @@ public class Manager : MonoBehaviour
     public const int INT_LEN = 4;
     public static bool returnMode = false;
     private static Manager _instance = null;
+
+    object responselock = new object();
+
     public static Manager Instance
     {
         get
@@ -39,12 +42,18 @@ public class Manager : MonoBehaviour
         timeAndNotes = new PianoRoll();
         ServerTimeAndNotes = new List<PianoRoll>();
         socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
-        socket.BeginConnect(new IPEndPoint(IPAddress.Loopback, 1234), (ar) =>
-        {
-            socket.EndConnect(ar);
-            byte[] len = new byte[4];
-            socket.BeginReceive(len, 0, INT_LEN, SocketFlags.None, Response, len);
-        }, null);
+        socket.Bind(new IPEndPoint(IPAddress.Loopback, 1234));
+        socket.Listen(-1);
+        socket.BeginAccept(AcceptCallback, null);
+    }
+
+    private void AcceptCallback(IAsyncResult asyncCallback)
+    {
+        Socket client = socket.EndAccept(asyncCallback);
+        Debug.Log(client.RemoteEndPoint.ToString() + " Connected");
+        byte[] len = new byte[4];
+        client.BeginReceive(len, 0, INT_LEN, SocketFlags.None, Response, new object[] { client, len });
+        socket.BeginAccept(AcceptCallback, null);
     }
 
     public void TimeStart()
@@ -70,27 +79,31 @@ public class Manager : MonoBehaviour
 
     private void Response(System.IAsyncResult asyncResult)
     {
-        byte[] lendata = (byte[])asyncResult.AsyncState;
-        socket.EndReceive(asyncResult);
+        Socket client = (Socket)((object[])asyncResult.AsyncState)[0];
+        byte[] lendata = (byte[])((object[])asyncResult.AsyncState)[1];
+        client.EndReceive(asyncResult);
         if (lendata.Length < 1)
         {
-            socket.Close();
+            client.Close();
             return;
         }
-        int len = System.BitConverter.ToInt32(HToNAndNToH(lendata));
-        byte[] data = new byte[len];
-        if (socket.Receive(data, 0, len, SocketFlags.None) < 1)
+        lock (responselock)
         {
-            socket.Close();
-            return;
+            int len = System.BitConverter.ToInt32(HToNAndNToH(lendata));
+            byte[] data = new byte[len];
+            if (client.Receive(data, 0, len, SocketFlags.None) < 1)
+            {
+                client.Close();
+                return;
+            }
+            lock (ServerTimeAndNotes)
+            {
+                if (ServerTimeAndNotes.Count <= 0)
+                    TimeStop();
+                ServerTimeAndNotes.Add(JsonConvert.DeserializeObject<PianoRoll>(System.Text.Encoding.UTF8.GetString(data)));
+            }
+            client.BeginReceive(lendata, 0, INT_LEN, SocketFlags.None, Response, lendata);
         }
-        lock (ServerTimeAndNotes)
-        {
-            if (ServerTimeAndNotes.Count <= 0)
-                TimeStop();
-            ServerTimeAndNotes.Add(JsonConvert.DeserializeObject<PianoRoll>(System.Text.Encoding.UTF8.GetString(data)));
-        }
-        socket.BeginReceive(lendata, 0, INT_LEN, SocketFlags.None, Response, lendata);
     }
 
     private void Update()

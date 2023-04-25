@@ -1,201 +1,189 @@
-import math
+import time
 import os
-import json
 import torch
-from torch import nn
-from torch.nn.utils.rnn import pad_sequence
-from torch.utils.data import Dataset, DataLoader
-from dictionary_roll import onseteventstoword, wordtoint
-from torch.nn.utils import clip_grad_norm_
+import torch.nn.functional as F
+from torch import nn, optim
+from torch.utils.data import DataLoader, TensorDataset
+from model import device
+from masking import create_mask
+from model import MusicTransformer,hparams
 
-# 超参数
-vocab_size = 4768
-max_len = 256
-batch_size = 6
-d_model = 256
-nhead = 8
-num_encoder_layers = 4
-num_decoder_layers = 4
-dim_feedforward = 1024
-dropout = 0.1
-lr = 0.001
-num_epochs = 10
+datapath = "C:/Users/z7913/Documents/project_real/preprocessed_data.pt"
+ckpt_path = "C:/Users/z7913/Documents/project_real/checkpoint.pt"
+save_path = "C:/Users/z7913/Documents/project_real/final_model.pt"
 
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+def transformer_lr_schedule(d_model, step_num, warmup_steps=4000):
+    if warmup_steps <= 0:
+        step_num += 4000
+        warmup_steps = 4000
+    step_num = step_num + 1e-6  # avoid division by 0
+    if type(step_num) == torch.Tensor:
+        arg = torch.min(step_num ** -0.5, step_num * (warmup_steps ** -1.5))
+    else:
+        arg = min(step_num ** -0.5, step_num * (warmup_steps ** -1.5))
+    return (d_model ** -0.5) * arg
+def loss_fn(prediction, target, criterion=F.cross_entropy):
+    mask = torch.ne(target, torch.zeros_like(target))           # ones where target is 0
+    _loss = criterion(prediction, target, reduction='none')     # loss before masking
+    # multiply mask to loss elementwise to zero out pad positions
+    mask = mask.to(_loss.dtype)
+    _loss *= mask
+    # output is average over the number of values that were not masked
+    return torch.sum(_loss) / torch.sum(mask)
+def train_step(model: MusicTransformer, opt, sched, inp, tar):
+    # forward pass
+    predictions = model(inp, mask=create_mask(inp, n=inp.dim() + 2))
+    # backward pass
+    opt.zero_grad()
+    loss = loss_fn(predictions.transpose(-1, -2), tar)
+    loss.backward()
+    opt.step()
+    sched.step()
+    return float(loss)
+def val_step(model: MusicTransformer, inp, tar):
+    predictions = model(inp, mask=create_mask(inp, n=max(inp.dim() + 2, 2)))
+    loss = loss_fn(predictions.transpose(-1, -2), tar)
+    return float(loss)
+class MusicTransformerTrainer:
 
-
-class PositionalEncoding(nn.Module):
-    def __init__(self, d_model, max_len=5000, dropout=0.1):
-        super(PositionalEncoding, self).__init__()
-        self.dropout = nn.Dropout(p=dropout)
-        self.max_len = max_len
-        
-        # Initialize positional encoding
-        pe = torch.zeros(max_len, d_model)
-        position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
-        div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model))
-        pe[:, 0::2] = torch.sin(position * div_term)
-        pe[:, 1::2] = torch.cos(position * div_term)
-        pe = pe[:self.max_len, :]
-        self.register_buffer('pe', pe)
-
-    def forward(self, x):
-        # Add positional encoding to input
-        seq_len = x.size(1)
-        pe = self.pe[:seq_len, :]
-        pe = pe.unsqueeze(0).repeat(x.size(0), 1, 1)[:, :seq_len, :]
-        x = x + pe
-
-        # Apply dropout
-        x = self.dropout(x)
-        return x
-
-
-class MusicTransformer(nn.Module):
-    def __init__(self, vocab_size, d_model, nhead, num_encoder_layers, num_decoder_layers, dim_feedforward, dropout):
-        super(MusicTransformer, self).__init__()
-        self.embedding = nn.Embedding(vocab_size, d_model)
-        self.pos_encoder = PositionalEncoding(d_model, max_len=max_len, dropout=dropout)
-        self.transformer = nn.Transformer(d_model=d_model, nhead=nhead, num_encoder_layers=num_encoder_layers, num_decoder_layers=num_decoder_layers, dim_feedforward=dim_feedforward, dropout=dropout)
-        self.decoder = nn.Linear(d_model, vocab_size)
-    
-    def forward(self, src, tgt):
-    # Embedding
-        src_embedded = self.embedding(src)
-        tgt_embedded = self.embedding(tgt)
+    def __init__(self, hparams_, datapath, batch_size, warmup_steps=4000,
+                 ckpt_path="music_transformer_ckpt.pt", load_from_checkpoint=False):
+        # get the data
+        self.datapath = datapath
+        self.batch_size = batch_size
+        input_data, target_data = torch.load(datapath)
+        data = input_data.long().to(device)  # 或 target_data，具體取決於您想要使用的張量
 
 
-    # Positional encoding
-        src_embedded = self.pos_encoder(src_embedded)
-        tgt_embedded = self.pos_encoder(tgt_embedded)
+        # max absolute position must be able to acount for the largest sequence in the data
+        if hparams_["max_abs_position"] > 0:
+            hparams_["max_abs_position"] = max(hparams_["max_abs_position"], data.shape[-1])
 
-    # Transformer
-        src_mask = self.transformer.generate_square_subsequent_mask(src.shape[1]).to(device)
-        tgt_mask = self.transformer.generate_square_subsequent_mask(tgt.shape[1]).to(device)
-        memory = self.transformer.encoder(src_embedded.transpose(0, 1), src_key_padding_mask=src == 0, mask=src_mask)
-        output = self.transformer.decoder(tgt_embedded.transpose(0, 1), memory, tgt_mask=tgt_mask, tgt_key_padding_mask=tgt == 0, memory_key_padding_mask=src == 0)
+        # train / validation split: 80 / 20
+        train_len = round(data.shape[0] * 0.8)
+        train_data = data[:train_len]
+        val_data = data[train_len:]
+        print(f"There are {data.shape[0]} samples in the data, {len(train_data)} training samples and {len(val_data)} "
+              "validation samples")
+        # datasets and dataloaders: split data into first (n-1) and last (n-1) tokens
+        self.train_ds = TensorDataset(train_data[:, :-1], train_data[:, 1:])
+        self.train_dl = DataLoader(dataset=self.train_ds, batch_size=batch_size, shuffle=True)
+        self.val_ds = TensorDataset(val_data[:, :-1], val_data[:, 1:])
+        self.val_dl = DataLoader(dataset=self.val_ds, batch_size=batch_size, shuffle=True)
+        # create model
+        self.model = MusicTransformer(**hparams_).to(device)
+        self.hparams = hparams_
+        # setup training
+        self.warmup_steps = warmup_steps
+        self.optimizer = optim.Adam(self.model.parameters(), lr=1.0, betas=(0.9, 0.98))
+        self.scheduler = optim.lr_scheduler.LambdaLR(
+            self.optimizer,
+            lambda x: transformer_lr_schedule(self.hparams['d_model'], x, self.warmup_steps)
+        )
+        # setup checkpointing / saving
+        self.ckpt_path = ckpt_path
+        self.train_losses = []
+        self.val_losses = []
 
-    # Linear layer
-        output = self.decoder(output.transpose(0, 1))
-        return output   
+        # load checkpoint if necessesary
+        if load_from_checkpoint and os.path.isfile(self.ckpt_path):
+            self.load()
+    def save(self, ckpt_path=None):
+        if ckpt_path is not None:
+            self.ckpt_path = ckpt_path
+        ckpt = {
+            "model_state_dict": self.model.state_dict(),
+            "optimizer_state_dict": self.optimizer.state_dict(),
+            "scheduler_state_dict": self.scheduler.state_dict(),
+            "train_losses": self.train_losses,
+            "validation_losses": self.val_losses,
+            "warmup_steps": self.warmup_steps,
+            "hparams": self.hparams
+        }
+        torch.save(ckpt, self.ckpt_path)
+        return
+    def load(self, ckpt_path=None):
+        if ckpt_path is not None:
+            self.ckpt_path = ckpt_path
+        ckpt = torch.load(self.ckpt_path)
+        del self.model, self.optimizer, self.scheduler
+        # create and load model
+        self.model = MusicTransformer(**ckpt["hparams"]).to(device)
+        self.hparams = ckpt["hparams"]
+        print("Loading the model...", end="")
+        print(self.model.load_state_dict(ckpt["model_state_dict"]))
+        # create and load load optimizer and scheduler
+        self.warmup_steps = ckpt["warmup_steps"]
+        self.optimizer = optim.Adam(self.model.parameters(), lr=1.0, betas=(0.9, 0.98))
+        self.optimizer.load_state_dict(ckpt["optimizer_state_dict"])
+        self.scheduler = optim.lr_scheduler.LambdaLR(
+            self.optimizer,
+            lambda x: transformer_lr_schedule(self.hparams['d_model'], x, self.warmup_steps)
+        )
+        self.scheduler.load_state_dict(ckpt["scheduler_state_dict"])
+        # load loss histories
+        self.train_losses = ckpt["train_losses"]
+        self.val_losses = ckpt["validation_losses"]
+        return
+    def fit(self, epochs):
+        print_interval = epochs // 10 + int(epochs < 10)
+        train_losses = []
+        val_losses = []
+        start = time.time()
+        print("Beginning training...")
+        try:
+            for epoch in range(epochs):
+                train_epoch_losses = []
+                val_epoch_losses = []
+                self.model.train()
+                for train_inp, train_tar in self.train_dl:
+                    loss = train_step(self.model, self.optimizer, self.scheduler, train_inp, train_tar)
+                    train_epoch_losses.append(loss)
+                self.model.eval()
+                for val_inp, val_tar in self.val_dl:
+                    loss = val_step(self.model, val_inp, val_tar)
+                    val_epoch_losses.append(loss)
+                # mean losses for the epoch
+                train_mean = sum(train_epoch_losses) / len(train_epoch_losses)
+                val_mean = sum(val_epoch_losses) / len(val_epoch_losses)
+                # store complete history of losses in member lists and relative history for this session in output lists
+                self.train_losses.append(train_mean)
+                train_losses.append(train_mean)
+                self.val_losses.append(val_mean)
+                val_losses.append(val_mean)
+                if ((epoch + 1) % print_interval) == 0:
+                    print(f"Epoch {epoch + 1} Time taken {round(time.time() - start, 2)} seconds "
+                          f"Train Loss {train_losses[-1]} Val Loss {val_losses[-1]}")
+                    # print("Checkpointing...")
+                    # self.save()
+                    # print("Done")
+                    start = time.time()
+        except KeyboardInterrupt:
+            pass
+        print("Checkpointing...")
+        self.save()
+        print("Done")
+        return train_losses, val_losses
+if __name__ == "__main__":
+   
+   # 设置训练参数
+    batch_size_ = 8
+    warmup_steps_ = 3000
+    epochs = 5000  # 设置训练轮次
 
-import glob
-data_path = "C:/Users/z7913/Documents/project/unity-piano/pianoroll"
+    # 设置训练器
+    print("Setting up the trainer...")
+    trainer = MusicTransformerTrainer(hparams, datapath, batch_size_, warmup_steps_,
+                                  ckpt_path, load_from_checkpoint=False)
+    print()
 
-class WordIntDataset(Dataset):
-    def __init__(self, data):
-        self.data = data
-        self.word2int = {}
-        self.int2word = {}
-        self.stride = 64  # 设置滑动窗口的步长
-        self.tokens = []
-        for json_data in self.data:
-            # 将字典转换为整数列表
-            words = onseteventstoword(json_data)
-            seq = self.sliding_window(wordtoint(words))
-            for window in seq:
-                self.tokens.extend(window)
-
-        # 构建词表
-        for token in self.tokens:
-            if token not in self.word2int:
-                index = len(self.word2int)
-                self.word2int[token] = index
-                self.int2word[index] = token
-        # 添加 <EOS> 到词表
-        self.word2int["<EOS>"] = len(self.word2int)
-        self.int2word[len(self.int2word)] = "<EOS>"
-        # 添加 <PAD> 到词表
-        self.word2int["<PAD>"] = len(self.word2int)
-        self.int2word[len(self.int2word)] = "<PAD>"
-
-    def sliding_window(self, seq):
-        windowed_seq = []
-        for i in range(0, len(seq) - max_len, self.stride):
-            windowed_seq.append(seq[i: i + max_len])
-        return windowed_seq
-
-    def __len__(self):
-        return len(self.tokens) // max_len
-
-    def __getitem__(self, index):
-        seq_len = max_len
-        seq = self.tokens[index : index + seq_len]
-        if len(seq) < seq_len:
-            seq += [self.word2int["<PAD>"]] * (seq_len - len(seq))
-        src = torch.tensor(seq)
-        tgt_input = src.clone()
-        tgt_output = torch.cat((tgt_input[1:], torch.tensor([self.word2int["<EOS>"]])), 0)  # 修改此行
-        if src.shape[0] < max_len:
-            pad_tensor = torch.tensor([self.word2int["<PAD>"]] * (max_len - src.shape[0]))
-            src = torch.cat((src, pad_tensor))
-            tgt_input = torch.cat((tgt_input, pad_tensor))
-            tgt_output = torch.cat((tgt_output, torch.tensor([self.word2int["<PAD>"]] * (max_len - tgt_output.shape[0]))))  # 修改此行
-        return src, tgt_input, tgt_output, len(seq)
-
-# 加载数据
-train_data = []
-for json_file in glob.glob(data_path + '/*.json'):
-    with open(json_file, 'r') as f:
-        json_data = json.load(f)
-        # 进行需要的额外处理
-        train_data.append(json_data)
-
-train_dataset = WordIntDataset(train_data)
-train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-#初始化模型
-model = MusicTransformer(vocab_size, d_model, nhead, num_encoder_layers, num_decoder_layers, dim_feedforward, dropout).to(device)
-optimizer = torch.optim.Adam(model.parameters(), lr=lr)
-criterion = nn.CrossEntropyLoss(ignore_index=train_dataset.word2int["<PAD>"])
-
-# 将数据集分成新的训练集和验证集
-val_ratio = 0.2
-num_val_samples = int(len(train_dataset) * val_ratio)
-num_train_samples = len(train_dataset) - num_val_samples
-train_dataset, val_dataset = torch.utils.data.random_split(train_dataset, [num_train_samples, num_val_samples])
-
-# 初始化数据加载器
-train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-val_dataloader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
-# 在训练循环外部初始化最佳验证损失和对应的epoch
-best_val_loss = float("inf")
-best_epoch = -1
-# 训练模型
-for epoch in range(num_epochs):
-    # 训练
-    model.train()
-    for i, batch in enumerate(train_dataloader):
-        src, tgt, tgt_out, lengths = [x.to(device) for x in batch]
-        optimizer.zero_grad()
-        output = model(src, tgt)
-        loss = criterion(output.reshape(-1, output.shape[2]), tgt_out.reshape(-1))
-        if torch.isnan(loss):  # 检查损失值是否为 NaN
-            continue
-        loss.backward()
-        clip_grad_norm_(model.parameters(), max_norm=1.0)  # 添加梯度裁剪
-        optimizer.step()
-        if i % 10 == 0:
-            print(f"Epoch {epoch + 1}, Batch {i + 1}, Training Loss: {loss.item():.4f}")
-
-
-   # 验证
-model.eval()
-total_val_loss = 0
-with torch.no_grad():
-    for i, batch in enumerate(val_dataloader):
-        src, tgt, tgt_out, lengths = [x.to(device) for x in batch]
-        output = model(src, tgt)
-        loss = criterion(output.reshape(-1, output.shape[2]), tgt_out.reshape(-1))
-        if torch.isnan(loss):  # 检查损失值是否为 NaN
-            continue
-        total_val_loss += loss.item()
-    avg_val_loss = total_val_loss / len(val_dataloader)
-    print(f"Epoch {epoch + 1}, Validation Loss: {avg_val_loss:.4f}")
-
-# 更新并保存最佳验证损失和对应的模型权重
-    if avg_val_loss < best_val_loss:
-        best_val_loss = avg_val_loss
-        best_epoch = epoch
-        torch.save(model.state_dict(), f"model_best_epoch_{best_epoch}.pt")
-
-print(f"Best Validation Loss: {best_val_loss:.4f} at epoch {best_epoch + 1}")
+       # 训练模型
+    trainer.fit(epochs)
+    # done training, save the model
+    print("Saving...")
+    save_file = {
+        "state_dict": trainer.model.state_dict(),
+        "hparams": trainer.hparams
+    }
+    torch.save(save_file, save_path)
+    print("Done!")
