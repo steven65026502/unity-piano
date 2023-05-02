@@ -1,0 +1,48 @@
+diff a/Piano/Assets/Script/Tools/Manager.cs b/Piano/Assets/Script/Tools/Manager.cs	(rejected hunks)
+@@ -79,27 +79,31 @@
+ 
+     private void Response(System.IAsyncResult asyncResult)
+     {
+-        byte[] lendata = (byte[])asyncResult.AsyncState;
+-        socket.EndReceive(asyncResult);
++        Socket client = (Socket)((object[])asyncResult.AsyncState)[0];
++        byte[] lendata = (byte[])((object[])asyncResult.AsyncState)[1];
++        client.EndReceive(asyncResult);
+         if (lendata.Length < 1)
+         {
+-            socket.Close();
++            client.Close();
+             return;
+         }
+-        int len = System.BitConverter.ToInt32(HToNAndNToH(lendata));
+-        byte[] data = new byte[len];
+-        if (socket.Receive(data, 0, len, SocketFlags.None) < 1)
++        lock (responselock)
+         {
+-            socket.Close();
+-            return;
+-        }
+-        lock (ServerTimeAndNotes)
+-        {
+-            if (ServerTimeAndNotes.Count <= 0)
+-                TimeStop();
+-            ServerTimeAndNotes.Add(JsonConvert.DeserializeObject<PianoRoll>(System.Text.Encoding.UTF8.GetString(data)));
++            int len = System.BitConverter.ToInt32(HToNAndNToH(lendata));
++            byte[] data = new byte[len];
++            if (client.Receive(data, 0, len, SocketFlags.None) < 1)
++            {
++                client.Close();
++                return;
++            }
++            lock (ServerTimeAndNotes)
++            {
++                if (ServerTimeAndNotes.Count <= 0)
++                    TimeStop();
++                ServerTimeAndNotes.Add(JsonConvert.DeserializeObject<PianoRoll>(System.Text.Encoding.UTF8.GetString(data)));
++            }
++            client.BeginReceive(lendata, 0, INT_LEN, SocketFlags.None, Response, lendata);
+         }
+-        socket.BeginReceive(lendata, 0, INT_LEN, SocketFlags.None, Response, lendata);
+     }
+ 
+     private void Update()

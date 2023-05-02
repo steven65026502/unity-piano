@@ -5,15 +5,19 @@ using System.IO;
 using TMPro;
 using UnityEngine;
 
+
 public class Teleporatation : MonoBehaviour
 {
     public TextMeshProUGUI buttonText;
     public bool returnMode = false;
+    public async void OnStartButtonClicked()
+    {
+        await Manager.Instance.SendMessageToServerAsync("start");
+    }
 
     public void OnClick()
     {
         bool mode = !returnMode;
-
         if (!returnMode)
         {
             // 將所有的 hide note 設為 false

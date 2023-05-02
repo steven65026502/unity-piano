@@ -110,8 +110,9 @@ def greedy_decode(model, inp, mode="nucleus_sampling", temperature=0.7, k=5, min
     # extra batch dimension needs to be gotten rid of, so squeeze
     return inp.squeeze()
 
-def audiate(token_ids, save_path="output.json", tempo= 850000, verbose=False):
-    word_sequence = inttoword(token_ids.tolist())   
+
+def audiate(token_ids, save_path="output.json", tempo=850000, verbose=False):
+    word_sequence = inttoword(token_ids.tolist())
 
     # Convert the word sequence to a dictionary of onset events
     raw_onset_events = wordtoonsetevents(word_sequence)
@@ -123,13 +124,10 @@ def audiate(token_ids, save_path="output.json", tempo= 850000, verbose=False):
 
     # Save the dictionary to a JSON file
     print(f"Saving JSON file at {save_path}...") if verbose else None
-    musicjson = json.dumps({'onset_events':onset_events, "pedal_events":[], "tempo":tempo})
-    with open(save_path, 'w') as outfile:
-        outfile.write(musicjson)
-    server.sendjson(musicjson)
+    musicjson = json.dumps({'onset_events': onset_events, "pedal_events": [], "tempo": tempo})
 
     print("Done")
-    return
+    return musicjson
 
 def generate(model_, inp, save_path="output_test.json", mode="nucleus_sampling", temperature=0.7, min_length=1800,
              tempo= 850000, verbose=False):
@@ -143,11 +141,13 @@ def generate(model_, inp, save_path="output_test.json", mode="nucleus_sampling",
     print(f"Time taken: {round(end - start, 2)} secs.") if verbose else None
 
     # generate audio
-    return audiate(token_ids=token_ids, save_path=save_path, tempo=tempo, verbose=verbose)
+    music_json = audiate(token_ids=token_ids, save_path=None, tempo=tempo, verbose=verbose)
+    return music_json
 
 
 if __name__ == "__main__":
     from model import hparams
+    import socket
 
     # Hardcoded parameters
     path_to_model = "final_model.pt"
@@ -156,7 +156,18 @@ if __name__ == "__main__":
     temperature = 0.9  # 保持為 0.75，可以根據需要進一步調整以控制多樣性
     min_length = 1800  # 設置生成序列的最小長度
     verbose = True
-    tempo= 850000 
-    music_transformer = load_model(path_to_model)
-    generate(model_=music_transformer, inp=["bar"], save_path=save_path,
-             temperature=temperature, mode=mode, min_length=min_length, verbose=verbose)
+    tempo = 850000
+
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(("127.0.0.1", 1234))
+        s.listen()
+        c, addr = s.accept()
+        with c:
+            print(addr, "connected.")  # Move this line here
+            music_transformer = load_model(path_to_model)
+            while True:
+                if server.wait_for_start_signal(c):
+                    generated_music_json = generate(model_=music_transformer, inp=["bar"], save_path=save_path,
+                                                    temperature=temperature, mode=mode, min_length=min_length,
+                                                    verbose=verbose)
+                    server.sendjson(c, generated_music_json)

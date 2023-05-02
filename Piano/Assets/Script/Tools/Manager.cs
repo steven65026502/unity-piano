@@ -7,15 +7,14 @@ using System.Net.Sockets;
 using System.Linq;
 using UnityEngine;
 using TMPro;
+using System.Text;
+using System.Threading.Tasks;
 
 public class Manager : MonoBehaviour
 {
     public const int INT_LEN = 4;
     public static bool returnMode = false;
     private static Manager _instance = null;
-
-    object responselock = new object();
-
     public static Manager Instance
     {
         get
@@ -28,6 +27,28 @@ public class Manager : MonoBehaviour
             return _instance;
         }
     }
+    public async Task SendMessageToServerAsync(string message)
+    {
+        if (socket == null || !socket.Connected) return;
+        Debug.Log("SendMessageToServerAsync called");
+        byte[] messageBytes = Encoding.UTF8.GetBytes(message);
+        byte[] lengthBytes = BitConverter.GetBytes(messageBytes.Length);
+
+        if (BitConverter.IsLittleEndian) Array.Reverse(lengthBytes);
+
+        try
+        {
+            await socket.SendAsync(lengthBytes, SocketFlags.None);
+            await socket.SendAsync(messageBytes, SocketFlags.None);
+            Debug.Log($"Sent message: {message}");
+        }
+        catch (SocketException ex)
+        {
+            Debug.LogError($"Error sending message to server: {ex.Message}");
+        }
+    }
+
+
 
     private List<Action> doinupdate;
     public PianoRoll timeAndNotes;
@@ -42,18 +63,12 @@ public class Manager : MonoBehaviour
         timeAndNotes = new PianoRoll();
         ServerTimeAndNotes = new List<PianoRoll>();
         socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
-        socket.Bind(new IPEndPoint(IPAddress.Loopback, 1234));
-        socket.Listen(-1);
-        socket.BeginAccept(AcceptCallback, null);
-    }
-
-    private void AcceptCallback(IAsyncResult asyncCallback)
-    {
-        Socket client = socket.EndAccept(asyncCallback);
-        Debug.Log(client.RemoteEndPoint.ToString() + " Connected");
-        byte[] len = new byte[4];
-        client.BeginReceive(len, 0, INT_LEN, SocketFlags.None, Response, new object[] { client, len });
-        socket.BeginAccept(AcceptCallback, null);
+        socket.BeginConnect(new IPEndPoint(IPAddress.Loopback, 1234), (ar) =>
+        {
+            socket.EndConnect(ar);
+            byte[] len = new byte[4];
+            socket.BeginReceive(len, 0, INT_LEN, SocketFlags.None, Response, len);
+        }, null);
     }
 
     public void TimeStart()
@@ -79,31 +94,27 @@ public class Manager : MonoBehaviour
 
     private void Response(System.IAsyncResult asyncResult)
     {
-        Socket client = (Socket)((object[])asyncResult.AsyncState)[0];
-        byte[] lendata = (byte[])((object[])asyncResult.AsyncState)[1];
-        client.EndReceive(asyncResult);
+        byte[] lendata = (byte[])asyncResult.AsyncState;
+        socket.EndReceive(asyncResult);
         if (lendata.Length < 1)
         {
-            client.Close();
+            socket.Close();
             return;
         }
-        lock (responselock)
+        int len = System.BitConverter.ToInt32(HToNAndNToH(lendata));
+        byte[] data = new byte[len];
+        if (socket.Receive(data, 0, len, SocketFlags.None) < 1)
         {
-            int len = System.BitConverter.ToInt32(HToNAndNToH(lendata));
-            byte[] data = new byte[len];
-            if (client.Receive(data, 0, len, SocketFlags.None) < 1)
-            {
-                client.Close();
-                return;
-            }
-            lock (ServerTimeAndNotes)
-            {
-                if (ServerTimeAndNotes.Count <= 0)
-                    TimeStop();
-                ServerTimeAndNotes.Add(JsonConvert.DeserializeObject<PianoRoll>(System.Text.Encoding.UTF8.GetString(data)));
-            }
-            client.BeginReceive(lendata, 0, INT_LEN, SocketFlags.None, Response, lendata);
+            socket.Close();
+            return;
         }
+        lock (ServerTimeAndNotes)
+        {
+            if (ServerTimeAndNotes.Count <= 0)
+                TimeStop();
+            ServerTimeAndNotes.Add(JsonConvert.DeserializeObject<PianoRoll>(System.Text.Encoding.UTF8.GetString(data)));
+        }
+        socket.BeginReceive(lendata, 0, INT_LEN, SocketFlags.None, Response, lendata);
     }
 
     private void Update()
