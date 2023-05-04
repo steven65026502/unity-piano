@@ -154,7 +154,7 @@ if __name__ == "__main__":
     save_path = "output_test.json"
     mode = "nucleus_sampling"  # 使用 "nucleus_sampling" 方法
     temperature = 0.9  # 保持為 0.75，可以根據需要進一步調整以控制多樣性
-    min_length = 1800  # 設置生成序列的最小長度
+    min_length = 100  # 設置生成序列的最小長度
     verbose = True
     tempo = 850000
 
@@ -166,8 +166,14 @@ if __name__ == "__main__":
             print(addr, "connected.")  # Move this line here
             music_transformer = load_model(path_to_model)
             while True:
-                if server.wait_for_start_signal(c):
+                print("Waiting for start signal...")
+                start_signal, received_temperature, received_p, received_min_length = server.wait_for_start_signal(c)
+                if start_signal:
+                    # 使用接收到的 temperature 值替換掉原來的值
+                    temperature = received_temperature
+                    print(temperature)
                     generated_music_json = generate(model_=music_transformer, inp=["bar"], save_path=save_path,
                                                     temperature=temperature, mode=mode, min_length=min_length,
                                                     verbose=verbose)
                     server.sendjson(c, generated_music_json)
+

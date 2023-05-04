@@ -9,6 +9,7 @@ using UnityEngine;
 using TMPro;
 using System.Text;
 using System.Threading.Tasks;
+using Newtonsoft.Json.Linq;
 
 public class Manager : MonoBehaviour
 {
