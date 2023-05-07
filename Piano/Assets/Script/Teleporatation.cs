@@ -4,7 +4,6 @@ using UnityEngine.UI;
 using Newtonsoft.Json;
 using System.Threading.Tasks;
 
-
 [System.Serializable]
 public class StartMessage
 {
@@ -21,35 +20,57 @@ public class Teleporatation : MonoBehaviour
     public Slider pSlider;
     public Slider minLengthSlider;
 
-    // 添加三个方法来处理 Slider 值更改
-    public async void OnTemperatureSliderChanged(float value)
+    private float temperatureValue;
+    private float pValue;
+    private float minLengthValue;
+
+    private void Start()
     {
-        // 当温度 Slider 值更改时，处理逻辑
-        await UpdateAndSendMessageToServer(value, pSlider.value, minLengthSlider.value);
+        // 將 Slider 事件連接到處理器方法
+        temperatureSlider.onValueChanged.AddListener(OnTemperatureSliderChanged);
+        pSlider.onValueChanged.AddListener(OnPSliderChanged);
+        minLengthSlider.onValueChanged.AddListener(OnMinLengthSliderChanged);
     }
 
-    public async void OnPSliderChanged(float value)
+    public void OnTemperatureSliderChanged(float value)
     {
-        // 当 p Slider 值更改时，处理逻辑
-        await UpdateAndSendMessageToServer(temperatureSlider.value, value, minLengthSlider.value);
+        // 更新溫度值
+        temperatureValue = value;
     }
 
-    public async void OnMinLengthSliderChanged(float value)
+    public void OnPSliderChanged(float value)
     {
-        // 当 minLength Slider 值更改时，处理逻辑
-        await UpdateAndSendMessageToServer(temperatureSlider.value, pSlider.value, value);
+        // 更新 p 值
+        pValue = value;
     }
 
-    public async Task UpdateAndSendMessageToServer(float temperature, float p, float minLength)
+    public void OnMinLengthSliderChanged(float value)
     {
-        string message = $"{{\"start\":{{\"temperature\":{temperature},\"minLength\":{minLength},\"p\":{p}}}}}";
-        await Manager.Instance.SendMessageToServerAsync(message);
+        // 更新 minLength 值
+        minLengthValue = value;
     }
 
-
-
-    public void OnClick()
+    public async void OnClick()
     {
+        if (temperatureValue < 0.5f)
+        {
+            temperatureValue = 0.5f;
+            temperatureSlider.value = temperatureValue;
+        }
+        if (pValue < 0.5f)
+        {
+            pValue = 0.5f;
+            pSlider.value = pValue;
+        }
+        if (minLengthValue < 1000)
+        {
+            minLengthValue = 1000;
+            minLengthSlider.value = minLengthValue;
+        }
+
+        // 在這裡向服務器發送最新的滑塊值
+        await Manager.Instance.UpdateAndSendMessageToServer(temperatureValue, pValue, minLengthValue);
+
         bool mode = !returnMode;
         if (!returnMode)
         {
@@ -125,3 +146,4 @@ public class Teleporatation : MonoBehaviour
         }
     }
 }
+

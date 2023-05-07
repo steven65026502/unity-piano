@@ -10,6 +10,84 @@ using TMPro;
 using System.Text;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
+public class Client
+{
+    private Socket socket;
+
+    public Client()
+    {
+        socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+    }
+
+    public void ConnectToServer()
+    {
+        socket.BeginConnect(new IPEndPoint(IPAddress.Loopback, 1234), (ar) =>
+        {
+            socket.EndConnect(ar);
+            byte[] len = new byte[4];
+            socket.BeginReceive(len, 0, Manager.INT_LEN, SocketFlags.None, Response, len);
+        }, null);
+    }
+
+    public async Task SendJsonToServerAsync(string message)
+    {
+        if (socket == null || !socket.Connected) return;
+
+        byte[] messageBytes = Encoding.UTF8.GetBytes(message);
+        byte[] lengthBytes = BitConverter.GetBytes(messageBytes.Length);
+
+        if (BitConverter.IsLittleEndian) Array.Reverse(lengthBytes);
+
+        try
+        {
+            await socket.SendAsync(new ArraySegment<byte>(lengthBytes), SocketFlags.None);
+            await socket.SendAsync(new ArraySegment<byte>(messageBytes), SocketFlags.None);
+            Debug.Log($"Sent message: {message}");
+        }
+        catch (SocketException ex)
+        {
+            Debug.LogError($"Error sending message to server: {ex.Message}");
+        }
+    }
+
+    private void Response(System.IAsyncResult asyncResult)
+    {
+        byte[] lendata = (byte[])asyncResult.AsyncState;
+        socket.EndReceive(asyncResult);
+        if (lendata.Length < 1)
+        {
+            socket.Close();
+            return;
+        }
+        int len = System.BitConverter.ToInt32(HToNAndNToH(lendata));
+        byte[] data = new byte[len];
+        if (socket.Receive(data, 0, len, SocketFlags.None) < 1)
+        {
+            socket.Close();
+            return;
+        }
+        lock (Manager.Instance.ServerTimeAndNotes)
+        {
+            if (Manager.Instance.ServerTimeAndNotes.Count <= 0)
+                Manager.Instance.TimeStop();
+            Manager.Instance.ServerTimeAndNotes.Add(JsonConvert.DeserializeObject<PianoRoll>(Encoding.UTF8.GetString(data)));
+        }
+        socket.BeginReceive(lendata, 0, Manager.INT_LEN, SocketFlags.None, Response, lendata);
+
+    }
+    public static byte[] HToNAndNToH(byte[] host)
+    {
+        byte[] bytes = new byte[host.Length];
+        host.CopyTo(bytes, 0);
+
+        if (BitConverter.IsLittleEndian)
+            Array.Reverse(bytes);
+
+        return bytes;
+    }
+
+}
+
 
 public class Manager : MonoBehaviour
 {
@@ -31,6 +109,7 @@ public class Manager : MonoBehaviour
     public async Task SendMessageToServerAsync(string message)
     {
         if (socket == null || !socket.Connected) return;
+        Debug.Log($"Sending message: {message}");
         Debug.Log("SendMessageToServerAsync called");
         byte[] messageBytes = Encoding.UTF8.GetBytes(message);
         byte[] lengthBytes = BitConverter.GetBytes(messageBytes.Length);
@@ -39,8 +118,8 @@ public class Manager : MonoBehaviour
 
         try
         {
-            await socket.SendAsync(lengthBytes, SocketFlags.None);
-            await socket.SendAsync(messageBytes, SocketFlags.None);
+            await socket.SendAsync(new ArraySegment<byte>(lengthBytes), SocketFlags.None);
+            await socket.SendAsync(new ArraySegment<byte>(messageBytes), SocketFlags.None);
             Debug.Log($"Sent message: {message}");
         }
         catch (SocketException ex)
@@ -48,7 +127,12 @@ public class Manager : MonoBehaviour
             Debug.LogError($"Error sending message to server: {ex.Message}");
         }
     }
-
+    public async Task UpdateAndSendMessageToServer(float temperature, float p, float minLength)
+    {
+        string message = $"{{\"signal\":\"start\",\"temperature\":{temperature},\"minLength\":{minLength},\"p\":{p}}}";
+        Debug.Log("Generated JSON message: " + message);
+        await Manager.Instance.SendMessageToServerAsync(message);
+    }
 
 
     private List<Action> doinupdate;
@@ -102,7 +186,7 @@ public class Manager : MonoBehaviour
             socket.Close();
             return;
         }
-        int len = System.BitConverter.ToInt32(HToNAndNToH(lendata));
+        int len = System.BitConverter.ToInt32(Client.HToNAndNToH(lendata));
         byte[] data = new byte[len];
         if (socket.Receive(data, 0, len, SocketFlags.None) < 1)
         {

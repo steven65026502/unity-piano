@@ -1,25 +1,32 @@
 import socket
 import json
 
-def sendjson(c, musicdata):
-    musicdata = musicdata.encode()
-    c.sendall(len(musicdata).to_bytes(4, 'big'))
-    c.sendall(musicdata)
+def send_json(conn, musicdata):
+    musicdata_bytes = musicdata.encode()
+    conn.sendall(len(musicdata_bytes).to_bytes(4, 'big'))
+    conn.sendall(musicdata_bytes)
 
-def wait_for_start_signal(c):
-    data = c.recv(1024).decode()
-    print("Received data:", data)  # Add this line
-    if data:
-        try:
-            received_data = json.loads(data)
-            print("Received JSON:", received_data)  # Add this line
-            if received_data["signal"] == "start":
-                return True, received_data["temperature"], received_data["p"], received_data["min_length"]
-        except json.JSONDecodeError:
-            print("Failed to decode JSON.")  # Add this line
-            pass
-    return False, None, None, None
+def recv_json(conn):
+    length_data = recvall(conn, 4)
+    if not length_data:
+        return None
 
+    length = int.from_bytes(length_data, byteorder='big')
+    data_str = recvall(conn, length).decode('utf-8')
+
+    print(f"Received raw data: {data_str}")
+
+    received_data = json.loads(data_str)
+    return received_data
+
+def recvall(sock, n):
+    data = bytearray()
+    while len(data) < n:
+        packet = sock.recv(n - len(data))
+        if not packet:
+            return None
+        data.extend(packet)
+    return data
 
 if __name__ == '__main__':
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -29,8 +36,7 @@ if __name__ == '__main__':
         with c:
             print(addr, "connected.")
             while True:
-                start_signal, received_temperature, received_p, received_min_length = wait_for_start_signal(c)
-                if start_signal:
-                    with open(input("json file:"), 'r') as f:
-                        musicdata = f.read()
-                    sendjson(c, musicdata)
+                with open(input("json file:"), 'r') as f:
+                    musicdata = f.read()
+                    print("test")
+                send_json(c, musicdata)
