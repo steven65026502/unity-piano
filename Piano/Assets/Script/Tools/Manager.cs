@@ -127,9 +127,9 @@ public class Manager : MonoBehaviour
             Debug.LogError($"Error sending message to server: {ex.Message}");
         }
     }
-    public async Task UpdateAndSendMessageToServer(float temperature, float p, float minLength)
+    public async Task UpdateAndSendMessageToServer(float temperature, float p, float minLength, string selectedModel)
     {
-        string message = $"{{\"signal\":\"start\",\"temperature\":{temperature},\"minLength\":{minLength},\"p\":{p}}}";
+        string message = $"{{\"signal\":\"start\",\"temperature\":{temperature},\"minLength\":{minLength},\"p\":{p},\"modelName\":\"{selectedModel}\"}}";
         Debug.Log("Generated JSON message: " + message);
         await Manager.Instance.SendMessageToServerAsync(message);
     }

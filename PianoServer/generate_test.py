@@ -1,5 +1,4 @@
 import os
-
 import torch
 import time
 import json
@@ -7,6 +6,7 @@ import server
 from masking import *
 from dictionary_roll import worddict, pad_token, wordtoint, inttoword, wordtoonsetevents
 import torch.nn.functional as F
+
 
 start_token = worddict.index('bar')
 end_token = worddict.index('endbar')
@@ -131,13 +131,13 @@ def audiate(token_ids, save_path="output.json", tempo=850000, verbose=False):
     print("Done")
     return musicjson
 
-def generate(model_, inp, save_path="output_test.json", mode="nucleus_sampling", temperature=0.7, min_length=1800,
+def generate(model_, inp, save_path="output_test.json", mode="nucleus_sampling", temperature=0.7, min_length=1800, p=0.5,
              tempo= 850000, verbose=False):
 
     # greedy decode
     print("Greedy decoding...") if verbose else None
     start = time.time()
-    token_ids = greedy_decode(model=model_, inp=inp, mode=mode, temperature=temperature, min_length=min_length)
+    token_ids = greedy_decode(model=model_, inp=inp, mode=mode, temperature=temperature, min_length=min_length, p=p)
     end = time.time()
     print(f"Generated {len(token_ids)} tokens.", end=" ") if verbose else None
     print(f"Time taken: {round(end - start, 2)} secs.") if verbose else None
@@ -152,11 +152,8 @@ if __name__ == "__main__":
     import socket
 
     # Hardcoded parameters
-    path_to_model = "final_model.pt"
     save_path = "output_test.json"
     mode = "nucleus_sampling"
-    temperature = 0.9
-    min_length = 100
     verbose = True
     tempo = 850000
 
@@ -166,19 +163,31 @@ if __name__ == "__main__":
         c, addr = s.accept()
         with c:
             print(addr, "connected.")
-            music_transformer = load_model(path_to_model)
             while True:
                 print("Waiting for start signal...")
                 received_data = server.recv_json(c)
-                received_temperature = received_data['temperature']
-                received_p = received_data['p']
-                received_min_length = received_data['minLength']
-                if received_temperature is not None and received_p is not None and received_min_length is not None:
-                    temperature = received_temperature
-                    print(temperature)
-                    generated_music_json = generate(model_=music_transformer, inp=["bar"], save_path=save_path,
-                                                    temperature=temperature, mode=mode, min_length=received_min_length,
-                                                    verbose=verbose)
-                    server.send_json(c, generated_music_json)
 
+                if  received_data["signal"] == "start":
+                    received_temperature = received_data['temperature']
+                    received_p = received_data['p']
+                    received_min_length = received_data['minLength']
+                    received_model_name = received_data['modelName']
+                    # 根據模型名稱選擇模型文件路徑
+                    if received_model_name == "Model1":
+                        model_path = "final_model.pt"
+                    elif received_model_name == "Model2":
+                        model_path = "pop_music.pt"
 
+                    # Load the model instance from the selected model path
+                    model_instance = load_model(model_path)
+
+                    if received_temperature is not None and received_p is not None and received_min_length is not None:
+                        temperature = received_temperature
+                        p = received_p
+                        min_length = received_min_length
+                        print(f"New parameters: temperature={temperature}, p={p}, min_length={min_length}")
+                        print(model_path)
+                        generated_music_json = generate(model_=model_instance, inp=["bar"], save_path=save_path,
+                                                        temperature=temperature, p=p, mode=mode, min_length=min_length,
+                                                        verbose=verbose)
+                        server.send_json(c, generated_music_json)

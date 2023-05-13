@@ -15,7 +15,6 @@ public class StartMessage
 public class Teleporatation : MonoBehaviour
 {
     public TextMeshProUGUI buttonText;
-    public bool returnMode = false;
     public Slider temperatureSlider;
     public Slider pSlider;
     public Slider minLengthSlider;
@@ -23,30 +22,30 @@ public class Teleporatation : MonoBehaviour
     private float temperatureValue;
     private float pValue;
     private float minLengthValue;
+    public bool isModel1Selected = true;
+    public model modelScript;
 
     private void Start()
     {
-        // 將 Slider 事件連接到處理器方法
         temperatureSlider.onValueChanged.AddListener(OnTemperatureSliderChanged);
         pSlider.onValueChanged.AddListener(OnPSliderChanged);
         minLengthSlider.onValueChanged.AddListener(OnMinLengthSliderChanged);
+
+        modelScript = GameObject.Find("model").GetComponent<model>();
     }
 
     public void OnTemperatureSliderChanged(float value)
     {
-        // 更新溫度值
         temperatureValue = value;
     }
 
     public void OnPSliderChanged(float value)
     {
-        // 更新 p 值
         pValue = value;
     }
 
     public void OnMinLengthSliderChanged(float value)
     {
-        // 更新 minLength 值
         minLengthValue = value;
     }
 
@@ -68,82 +67,39 @@ public class Teleporatation : MonoBehaviour
             minLengthSlider.value = minLengthValue;
         }
 
-        // 在這裡向服務器發送最新的滑塊值
-        await Manager.Instance.UpdateAndSendMessageToServer(temperatureValue, pValue, minLengthValue);
+        string selectedModel = modelScript.currentModel;
+        await Manager.Instance.UpdateAndSendMessageToServer(temperatureValue, pValue, minLengthValue, selectedModel);
 
-        bool mode = !returnMode;
-        if (!returnMode)
+        // 這裡寫下 teleportation 按鈕被點擊後的行為
+        // 當按鈕被點擊時，執行以下操作：
+
+        // 隱藏指定的音符
+        foreach (Script_NoteHub noteHub in FindObjectsOfType<Script_NoteHub>())
         {
-            // 將所有的 hide note 設為 false
-            foreach (Script_NoteHub noteHub in FindObjectsOfType<Script_NoteHub>())
+            for (int i = 0; i < Script_NoteHub.NoteLength; i++)
             {
-                for (int i = 0; i < Script_NoteHub.NoteLength; i++)
-                {
-                    noteHub.HideNote[i] = false;
-                }
+                noteHub.HideNote[i] = false;
             }
-            for (int i = 0; i < 9; i++)
-            {
-                Script_NoteHub noteHub0 = GameObject.Find("NoteHub0").GetComponent<Script_NoteHub>();
-                noteHub0.HideNote[i] = true;
-            }
-            for (int i = 11; i > 1; i--)
-            {
-                Script_NoteHub noteHub8 = GameObject.Find("NoteHub8").GetComponent<Script_NoteHub>();
-                noteHub8.HideNote[i] = true;
-            }
-
-            Manager.Instance.TimeStop();
-            string jsonData = JsonConvert.SerializeObject(Manager.Instance.timeAndNotes);
-            Debug.Log(jsonData);
-            Manager.Instance.timeAndNotes.Clear();
-
-            // 改變 Main Camera 的 X 軸座標
-            Camera.main.transform.position = new Vector3(4.1f, Camera.main.transform.position.y, Camera.main.transform.position.z);
-
-            Camera.main.fieldOfView = 70;
-
-            buttonText.text = "Return";
-            returnMode = true;
         }
-        else
+        for (int i = 0; i < 9; i++)
         {
-            for (int i = 0; i <= 3; i++)
-            {
-                Script_NoteHub noteHub = GameObject.Find($"NoteHub{i}").GetComponent<Script_NoteHub>();
-                for (int j = 0; j < Script_NoteHub.NoteLength; j++)
-                {
-                    noteHub.HideNote[j] = true;
-                }
-            }
-
-            for (int i = 6; i <= 8; i++)
-            {
-                Script_NoteHub noteHub = GameObject.Find($"NoteHub{i}").GetComponent<Script_NoteHub>();
-                for (int j = 1; j < Script_NoteHub.NoteLength; j++)
-                {
-                    noteHub.HideNote[j] = true;
-                }
-            }
-
-            Script_NoteHub noteHub7 = GameObject.Find("NoteHub7").GetComponent<Script_NoteHub>();
-            noteHub7.HideNote[0] = true;
+            Script_NoteHub noteHub0 = GameObject.Find("NoteHub0").GetComponent<Script_NoteHub>();
+            noteHub0.HideNote[i] = true;
+        }
+        for (int i = 11; i > 1; i--)
+        {
             Script_NoteHub noteHub8 = GameObject.Find("NoteHub8").GetComponent<Script_NoteHub>();
-            noteHub8.HideNote[0] = true;
-
-            Manager.Instance.TimeStop();
-            string jsonData = JsonConvert.SerializeObject(Manager.Instance.timeAndNotes);
-            Debug.Log(jsonData);
-            Manager.Instance.timeAndNotes.Clear();
-
-            // 改變 Main Camera 的 X 軸座標
-            Camera.main.transform.position = new Vector3(-5.3f, Camera.main.transform.position.y, Camera.main.transform.position.z);
-
-            Camera.main.fieldOfView = 24;
-
-            buttonText.text = "Teleportation";
-            returnMode = false;
+            noteHub8.HideNote[i] = true;
         }
+
+        // 暫停時間軸
+        Manager.Instance.TimeStop();
+
+        // 將時間和音符數據轉換為 JSON 格式，並輸出到控制台
+        string jsonData = JsonConvert.SerializeObject(Manager.Instance.timeAndNotes);
+        Debug.Log(jsonData);
+
+        // 清空時間和音符數據
+        Manager.Instance.timeAndNotes.Clear();
     }
 }
-
