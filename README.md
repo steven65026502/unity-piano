@@ -9,7 +9,7 @@
 ## 系統流程
 
 ```mermaid
-flowchart LR
+flowchart TB
     A[滑鼠彈奏 3D 鋼琴] --> B[C# 音效與按鍵動畫]
     B --> C[記錄開始時間、音高、力度與結束時間]
     C --> D[PianoRoll JSON]
